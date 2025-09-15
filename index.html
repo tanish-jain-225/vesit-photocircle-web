@@ -7,6 +7,7 @@
   <meta name="description" content="VESIT PhotoCircle (VPC) is the official student photography club of VESIT, Mumbai. Explore our best pictures, events coverage, workshops, and contact details.">
   <meta name="theme-color" content="#0f1115">
   
+  
   <!-- Open Graph / SEO -->
   <meta property="og:title" content="VESIT PhotoCircle (VPC)">
   <meta property="og:description" content="Official student photography club of VESIT. Events, workshops, photowalks, and our best photos gallery.">
@@ -14,10 +15,11 @@
 
   <title>VESIT PhotoCircle (VPC) — Official Photography Club of VESIT</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./resources/styles.css">
+  <link rel="shortcut icon" href="./resources/static/logo.png" type="image/png">
 
 </head>
 <body>
@@ -25,7 +27,7 @@
     <div class="container header-inner">
       <a href="#top" class="brand" aria-label="VESIT PhotoCircle home">
         <span class="brand-logo" aria-hidden="true">
-            <img src="./resources/static/logo.png" alt="VESIT PhotoCircle Logo" width="50px">
+            <img src="./resources/static/logo.png" alt="VESIT PhotoCircle Logo" width="50px" decoding="async">
         </span>
         <span class="brand-text">VESIT PhotoCircle</span>
       </a>
@@ -45,6 +47,8 @@
           <li><a href="#contact">Contact</a></li>
         </ul>
       </nav>
+
+      
     </div>
   </header>
 
@@ -62,7 +66,7 @@
         </div>
         <div class="hero-media" aria-hidden="true">
           <div class="hero-frame">
-            <img src="./resources/static/group-photo.png" alt="Group photo of VPC members">
+            <img src="./resources/static/group-photo.png" alt="Group photo of VPC members" decoding="async" fetchpriority="high">
           </div>
         </div>
       </div>
@@ -85,15 +89,15 @@
 
             <div class="about-stats">
               <div class="stat">
-                <div class="stat-value">~25–31</div>
+                <div class="stat-value">~30–40</div>
                 <div class="stat-label">Members / year</div>
               </div>
               <div class="stat">
-                <div class="stat-value">10+ / yr</div>
+                <div class="stat-value">100+ / year</div>
                 <div class="stat-label">Major events covered</div>
               </div>
               <div class="stat">
-                <div class="stat-value">Since</div>
+                <div class="stat-value">Since 2019</div>
                 <div class="stat-label">Student-run club</div>
               </div>
             </div>
@@ -135,11 +139,16 @@
       <div class="container">
         <div class="section-head">
           <h2>Best Pictures Gallery</h2>
-          <p>Handpicked shots from recent events and photowalks.</p>
+          <p>Handpicked shots from recent events and photowalks. <span id="gallery-count" aria-live="polite"></span></p>
         </div>
 
         <!-- Gallery is populated dynamically from /resources/gallery-images - Here data-max is the maximum number of images to load -->
         <div class="gallery-grid" data-gallery-path="./resources/gallery-images" data-max="300"></div>
+        <div class="gallery-actions pager">
+          <button class="btn" id="prev-page" aria-label="Previous page">‹</button>
+          <span id="page-indicator" aria-live="polite">Page 1</span>
+          <button class="btn" id="next-page" aria-label="Next page">›</button>
+        </div>
       </div>
 
       <!-- Lightbox modal -->

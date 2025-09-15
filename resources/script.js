@@ -15,6 +15,8 @@ if (navToggleButton && siteNav) {
   });
 }
 
+// Theme toggle removed
+
 // Lightbox
 const lightbox = document.querySelector('.lightbox');
 const lightboxImage = document.querySelector('.lightbox-image');
@@ -108,13 +110,22 @@ if (lightbox) {
   const basePath = grid.getAttribute('data-gallery-path') || './resources/gallery-images';
   const max = parseInt(grid.getAttribute('data-max') || '500', 10);
   const supportedExts = ['.png', '.jpg', '.jpeg', '.webp'];
+  const countEl = document.getElementById('gallery-count');
+  const prevPageBtn = document.getElementById('prev-page');
+  const nextPageBtn = document.getElementById('next-page');
+  const pageIndicator = document.getElementById('page-indicator');
+
+  const BATCH_SIZE = 12; // images per page
+  const MAX_CONCURRENCY = 4; // simultaneous loads to avoid thrash
+  let discovered = []; // all discovered image URLs
+  let currentPage = 1;
 
   function fileExists(src) {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = src + (src.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      img.src = src; // no cache-busting to leverage CDN/browser cache
     });
   }
 
@@ -150,18 +161,107 @@ if (lightbox) {
     a.setAttribute('data-caption', caption || '');
     const img = document.createElement('img');
     img.loading = 'lazy';
+    img.decoding = 'async';
     img.src = url;
     img.alt = caption || 'Photo';
     a.appendChild(img);
     return a;
   }
 
+  function updateCount() {
+    if (countEl) countEl.textContent = discovered.length ? `(${discovered.length})` : '';
+  }
+
+  async function renderNextBatch() {
+    const start = rendered;
+    const end = Math.min(rendered + BATCH_SIZE, discovered.length);
+    if (start >= end) return false;
+    const fragment = document.createDocumentFragment();
+    const queue = [];
+    for (let i = start; i < end; i++) {
+      const item = createItem(discovered[i]);
+      fragment.appendChild(item);
+      const img = item.querySelector('img');
+      queue.push(new Promise((resolve) => {
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(); } };
+        img.onload = finish;
+        img.onerror = finish;
+      }));
+    }
+    grid.appendChild(fragment);
+    rendered = end;
+    // throttle concurrent waits
+    let index = 0;
+    async function runNext() {
+      if (index >= queue.length) return;
+      const current = index++;
+      await queue[current];
+      await runNext();
+    }
+    const runners = Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, runNext);
+    await Promise.all(runners);
+    return true;
+  }
+
+  function updatePager() {
+    const totalPages = Math.max(1, Math.ceil(discovered.length / BATCH_SIZE));
+    if (pageIndicator) pageIndicator.textContent = `Page ${Math.min(currentPage, totalPages)} / ${totalPages}`;
+    if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+    if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
+  }
+
   (async () => {
-    const items = await buildSequentialList();
-    grid.innerHTML = '';
-    items.forEach(item => grid.appendChild(createItem(item)));
+    grid.classList.add('loading');
+    discovered = await buildSequentialList();
+    updateCount();
+    await renderPage(1);
+    grid.classList.remove('loading');
+    updatePager();
     document.dispatchEvent(new CustomEvent('gallery:populated'));
   })();
+
+  async function renderPage(page) {
+    currentPage = page;
+    const start = (page - 1) * BATCH_SIZE;
+    const end = Math.min(start + BATCH_SIZE, discovered.length);
+    const fragment = document.createDocumentFragment();
+    grid.innerHTML = '';
+    const queue = [];
+    for (let i = start; i < end; i++) {
+      const item = createItem(discovered[i]);
+      fragment.appendChild(item);
+      const img = item.querySelector('img');
+      queue.push(new Promise((resolve) => {
+        let done = false; const finish = () => { if (!done) { done = true; resolve(); } };
+        img.onload = finish; img.onerror = finish;
+      }));
+    }
+    grid.appendChild(fragment);
+    let index = 0;
+    async function runNext() {
+      if (index >= queue.length) return;
+      const current = index++;
+      await queue[current];
+      await runNext();
+    }
+    const runners = Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, runNext);
+    await Promise.all(runners);
+  }
+
+  prevPageBtn?.addEventListener('click', async () => {
+    if (currentPage <= 1) return;
+    prevPageBtn.disabled = true; nextPageBtn && (nextPageBtn.disabled = true);
+    await renderPage(currentPage - 1);
+    updatePager();
+  });
+  nextPageBtn?.addEventListener('click', async () => {
+    const totalPages = Math.max(1, Math.ceil(discovered.length / BATCH_SIZE));
+    if (currentPage >= totalPages) return;
+    prevPageBtn && (prevPageBtn.disabled = true); nextPageBtn.disabled = true;
+    await renderPage(currentPage + 1);
+    updatePager();
+  });
 })();
 
 // Open from gallery (event delegation to support dynamic items)
