@@ -101,8 +101,71 @@ if (lightbox) {
   });
 }
 
-// Open from gallery
-const galleryItems = document.querySelectorAll('.gallery-item');
+// Dynamic gallery population
+(function populateGallery() {
+  const grid = document.querySelector('.gallery-grid');
+  if (!grid) return;
+  const basePath = grid.getAttribute('data-gallery-path') || './resources/gallery-images';
+  const max = parseInt(grid.getAttribute('data-max') || '500', 10);
+  const supportedExts = ['.png', '.jpg', '.jpeg', '.webp'];
+
+  function fileExists(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = src + (src.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    });
+  }
+
+  async function buildSequentialList() {
+    const candidates = [];
+    // Try 1..max for each extension until a gap of all exts is found for 10 in a row
+    let consecutiveMisses = 0;
+    for (let i = 1; i <= max; i++) {
+      let foundForIndex = false;
+      for (const ext of supportedExts) {
+        const url = `${basePath}/${i}${ext}`;
+        // eslint-disable-next-line no-await-in-loop
+        const ok = await fileExists(url);
+        if (ok) {
+          candidates.push({ url, caption: String(i) });
+          foundForIndex = true;
+          consecutiveMisses = 0;
+          break;
+        }
+      }
+      if (!foundForIndex) {
+        consecutiveMisses += 1;
+        if (consecutiveMisses >= 15 && candidates.length > 0) break;
+      }
+    }
+    return candidates;
+  }
+
+  function createItem({ url, caption }) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.className = 'gallery-item';
+    a.setAttribute('data-caption', caption || '');
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.src = url;
+    img.alt = caption || 'Photo';
+    a.appendChild(img);
+    return a;
+  }
+
+  (async () => {
+    const items = await buildSequentialList();
+    grid.innerHTML = '';
+    items.forEach(item => grid.appendChild(createItem(item)));
+    document.dispatchEvent(new CustomEvent('gallery:populated'));
+  })();
+})();
+
+// Open from gallery (event delegation to support dynamic items)
+const galleryContainer = document.querySelector('.gallery-grid');
 
 function upgradeUnsplashResolution(url) {
   try {
@@ -128,14 +191,16 @@ function getItemSrc(item) {
   return upgradeUnsplashResolution(img?.getAttribute('src') || '');
 }
 
-galleryItems.forEach(item => {
-  item.addEventListener('click', (e) => {
+if (galleryContainer) {
+  galleryContainer.addEventListener('click', (e) => {
+    const item = e.target.closest('.gallery-item');
+    if (!item || !galleryContainer.contains(item)) return;
     e.preventDefault();
     const src = getItemSrc(item);
     const caption = item.getAttribute('data-caption') || item.querySelector('img')?.getAttribute('alt') || '';
     if (src) openLightbox(src, caption);
   });
-});
+}
 
 // Close handlers
 lightboxClose?.addEventListener('click', closeLightbox);
@@ -202,19 +267,20 @@ if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 // Lightbox index and navigation
 (function enhanceLightboxNavigation() {
   if (!lightbox) return;
-  const items = Array.from(document.querySelectorAll('.gallery-item'));
+  function getItems() { return Array.from(document.querySelectorAll('.gallery-item')); }
   const btnPrev = document.querySelector('.lightbox-prev');
   const btnNext = document.querySelector('.lightbox-next');
   let currentIndex = -1;
 
   function updateControls() {
     const atStart = currentIndex <= 0;
-    const atEnd = currentIndex >= items.length - 1;
+    const atEnd = currentIndex >= getItems().length - 1;
     if (btnPrev) { btnPrev.disabled = atStart; btnPrev.setAttribute('aria-disabled', String(atStart)); }
     if (btnNext) { btnNext.disabled = atEnd; btnNext.setAttribute('aria-disabled', String(atEnd)); }
   }
 
   function openByIndex(idx) {
+    const items = getItems();
     if (idx < 0 || idx >= items.length) return;
     const a = items[idx];
     if (!a) return;
@@ -228,16 +294,19 @@ if (yearEl) yearEl.textContent = String(new Date().getFullYear());
     preload(prevSrc);
   }
 
-  items.forEach((item, idx) => {
-    item.addEventListener('click', () => {
-      currentIndex = idx;
-      setTimeout(() => {
-        updateControls();
-        const nextSrc = items[idx + 1] ? getItemSrc(items[idx + 1]) : undefined;
-        const prevSrc = items[idx - 1] ? getItemSrc(items[idx - 1]) : undefined;
-        preload(nextSrc); preload(prevSrc);
-      }, 0);
-    });
+  document.addEventListener('click', (e) => {
+    const item = e.target.closest('.gallery-item');
+    if (!item) return;
+    const items = getItems();
+    const idx = items.indexOf(item);
+    if (idx === -1) return;
+    currentIndex = idx;
+    setTimeout(() => {
+      updateControls();
+      const nextSrc = items[idx + 1] ? getItemSrc(items[idx + 1]) : undefined;
+      const prevSrc = items[idx - 1] ? getItemSrc(items[idx - 1]) : undefined;
+      preload(nextSrc); preload(prevSrc);
+    }, 0);
   });
 
   btnPrev?.addEventListener('click', (e) => { e.stopPropagation(); if (currentIndex > 0) openByIndex(currentIndex - 1); });
@@ -245,6 +314,7 @@ if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
   window.addEventListener('keydown', (e) => {
     if (lightbox.getAttribute('aria-hidden') === 'true') return;
+    const items = getItems();
     if (e.key === 'ArrowLeft' && currentIndex > 0) openByIndex(currentIndex - 1);
     if (e.key === 'ArrowRight' && currentIndex < items.length - 1) openByIndex(currentIndex + 1);
   });

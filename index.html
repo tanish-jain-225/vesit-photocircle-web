@@ -11,10 +11,8 @@
   <meta property="og:title" content="VESIT PhotoCircle (VPC)">
   <meta property="og:description" content="Official student photography club of VESIT. Events, workshops, photowalks, and our best photos gallery.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://vesit.ves.ac.in/">
-  <meta property="og:image" content="https://images.unsplash.com/photo-1518779578993-ec3579fee39f?w=1200&q=80&auto=format&fit=crop">
-  
-  <title>VESIT PhotoCircle (VPC) — Official Photography Club</title>
+
+  <title>VESIT PhotoCircle (VPC) — Official Photography Club of VESIT</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -140,39 +138,8 @@
           <p>Handpicked shots from recent events and photowalks.</p>
         </div>
 
-        <!-- Replace image URLs with your own assets or local files in /resources/gallery-images -->
-        <div class="gallery-grid">
-            <a href="./resources/gallery-images/1.png" class="gallery-item" data-caption="Campus fest lights">
-                <img loading="lazy" src="./resources/gallery-images/1.png" alt="Campus fest lights">
-            </a>
-            <a href="./resources/gallery-images/2.png" class="gallery-item" data-caption="Portrait during Sphurti">
-                <img loading="lazy" src="./resources/gallery-images/2.png" alt="Portrait during Sphurti">
-            </a>
-            <a href="./resources/gallery-images/3.png" class="gallery-item" data-caption="Utsav cultural performance">
-                <img loading="lazy" src="./resources/gallery-images/3.png" alt="Utsav cultural performance">
-            </a>
-            <a href="./resources/gallery-images/4.png" class="gallery-item" data-caption="Sports day action">
-                <img loading="lazy" src="./resources/gallery-images/4.png" alt="Sports day action">
-            </a>
-            <a href="./resources/gallery-images/5.png" class="gallery-item" data-caption="City photowalk">
-                <img loading="lazy" src="./resources/gallery-images/5.png" alt="City photowalk">
-            </a>
-            <a href="./resources/gallery-images/6.png" class="gallery-item" data-caption="Convocation smiles">
-                <img loading="lazy" src="./resources/gallery-images/6.png" alt="Convocation smiles">
-            </a>
-            <a href="./resources/gallery-images/7.png" class="gallery-item" data-caption="7">
-                <img loading="lazy" src="./resources/gallery-images/7.png" alt="7">
-            </a>
-            <a href="./resources/gallery-images/8.png" class="gallery-item" data-caption="8">
-                <img loading="lazy" src="./resources/gallery-images/8.png" alt="8">
-            </a>
-            <a href="./resources/gallery-images/9.png" class="gallery-item" data-caption="9">
-                <img loading="lazy" src="./resources/gallery-images/9.png" alt="9">
-            </a>
-            <a href="./resources/gallery-images/10.png" class="gallery-item" data-caption="10">
-                <img loading="lazy" src="./resources/gallery-images/10.png" alt="10">
-            </a>
-        </div>
+        <!-- Gallery is populated dynamically from /resources/gallery-images - Here data-max is the maximum number of images to load -->
+        <div class="gallery-grid" data-gallery-path="./resources/gallery-images" data-max="300"></div>
       </div>
 
       <!-- Lightbox modal -->
