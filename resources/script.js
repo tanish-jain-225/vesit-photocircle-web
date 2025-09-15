@@ -109,7 +109,8 @@ if (lightbox) {
   if (!grid) return;
   const basePath = grid.getAttribute('data-gallery-path') || './resources/gallery-images';
   const max = parseInt(grid.getAttribute('data-max') || '500', 10);
-  const supportedExts = ['.png', '.jpg', '.jpeg', '.webp'];
+  // Strict: only allow PNG files for gallery
+  const supportedExts = ['.png'];
   const countEl = document.getElementById('gallery-count');
   const prevPageBtn = document.getElementById('prev-page');
   const nextPageBtn = document.getElementById('next-page');
@@ -120,6 +121,8 @@ if (lightbox) {
   let discovered = []; // all discovered image URLs
   let currentPage = 1;
   let rendered = 0;
+
+  console.info('[gallery] running in strict PNG-only mode');
 
   function fileExists(src) {
     // Prefer a lightweight HEAD request to check for existence to avoid
@@ -163,6 +166,12 @@ if (lightbox) {
         const list = await resp.json();
         if (Array.isArray(list) && list.length) {
           for (const fileName of list) {
+            // Only honor .png entries when strict mode is enabled
+            if (!/\.png$/i.test(fileName)) {
+              // Log a warning for maintainers, but do not include non-PNG files
+              console.warn('[gallery] ignoring non-PNG manifest entry:', fileName);
+              continue;
+            }
             const url = `${basePath}/${fileName}`;
             candidates.push({ url, caption: fileName.replace(/\.[a-zA-Z0-9]+$/, '') });
           }
