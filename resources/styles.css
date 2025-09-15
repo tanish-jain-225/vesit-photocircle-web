@@ -96,6 +96,21 @@ a { color: var(--text); text-decoration: none; }
 
 .gallery-grid.loading { position: relative; }
 .gallery-grid.loading::after { content: "Loading…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: rgba(0,0,0,0.08); border-radius: 12px; }
+.gallery-grid.skeleton-loading::after { display: none; }
+
+/* Skeleton loaders for gallery items */
+.skeleton-list { display: contents; }
+.skeleton-item { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); aspect-ratio: 4 / 3; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); }
+.skeleton-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 100%); transform: translateX(-100%); animation: shimmer 1.1s linear infinite; }
+.skeleton-placeholder { position: absolute; inset: 0; display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box; }
+.skeleton-caption { width: 60%; height: 12px; background: rgba(255,255,255,0.04); border-radius: 6px; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* Gallery image loading states */
+.gallery-item img { transition: transform .3s ease, opacity .28s ease; opacity: 0; }
+.gallery-item img.is-loaded { opacity: 1; }
+.gallery-item .skeleton-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(180deg, rgba(11,13,18,0.4), rgba(11,13,18,0.35)); }
+.gallery-item .image-spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: rgba(255,255,255,0.9); animation: spin 1s linear infinite; }
 
 .gallery-actions { display: flex; justify-content: center; margin-top: 12px; align-items: center; gap: 10px; }
 .gallery-actions.pager .btn { 

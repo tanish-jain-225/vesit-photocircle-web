@@ -4,16 +4,50 @@
 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="VESIT PhotoCircle (VPC) is the official student photography club of VESIT, Mumbai. Explore our best pictures, events coverage, workshops, and contact details.">
+  <meta name="description" content="VESIT PhotoCircle (VPC) — the student photography club at VESIT, Mumbai. We cover campus events, run workshops and photowalks, and share our best photos. Contact for event coverage and collaborations.">
   <meta name="theme-color" content="#0f1115">
-  
-  
+
+  <!-- Canonical -->
+  <link rel="canonical" href="/">
+
   <!-- Open Graph / SEO -->
+  <meta property="og:site_name" content="VESIT PhotoCircle">
   <meta property="og:title" content="VESIT PhotoCircle (VPC)">
-  <meta property="og:description" content="Official student photography club of VESIT. Events, workshops, photowalks, and our best photos gallery.">
+  <meta property="og:description" content="Student photography club at VESIT — event coverage, workshops, photowalks, and curated galleries. Contact for collaborations.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="/">
+  <meta property="og:image" content="/resources/static/group-photo.png">
+  <meta property="og:image:alt" content="Group photo of VESIT PhotoCircle members">
+  <meta property="og:image:width" content="1600">
+  <meta property="og:image:height" content="900">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@vesit.photocircle">
+  <meta name="twitter:title" content="VESIT PhotoCircle (VPC)">
+  <meta name="twitter:description" content="Student photography club at VESIT — event coverage, workshops, photowalks, and curated galleries.">
+  <meta name="twitter:image" content="/resources/static/group-photo.png">
 
   <title>VESIT PhotoCircle (VPC) — Official Photography Club of VESIT</title>
+
+  <!-- Structured data (Organization) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "VESIT PhotoCircle",
+  "url": "/",
+  "logo": "/resources/static/logo.png",
+    "sameAs": [
+      "https://instagram.com/vesit.photocircle"
+    ],
+    "contactPoint": [{
+      "@type": "ContactPoint",
+      "contactType": "information",
+      "email": "mailto:vesit.photocircle@ves.ac.in"
+    }]
+  }
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -90,21 +124,20 @@
             <div class="about-stats">
               <div class="stat">
                 <div class="stat-value">~30–40</div>
-                <div class="stat-label">Members / year</div>
+                <div class="stat-label">Members</div>
               </div>
               <div class="stat">
-                <div class="stat-value">100+ / year</div>
-                <div class="stat-label">Major events covered</div>
+                <div class="stat-value">150+</div>
+                <div class="stat-label">Event covered</div>
               </div>
               <div class="stat">
-                <div class="stat-value">Since 2019</div>
+                <div class="stat-value">Since 2014</div>
                 <div class="stat-label">Student-run club</div>
               </div>
             </div>
 
             <ul class="key-facts">
-              <li><strong>Type:</strong> Student photography club</li>
-              <li><strong>Members:</strong> ~25–31 per year (varies)</li>
+              <li><strong>Type:</strong> Student Photography Club</li>
               <li><strong>Faculty in-charge:</strong> Sunny Nahar</li>
               <li><strong>Email:</strong> <a href="mailto:vesit.photocircle@ves.ac.in">vesit.photocircle@ves.ac.in</a></li>
             </ul>
@@ -139,7 +172,7 @@
       <div class="container">
         <div class="section-head">
           <h2>Best Pictures Gallery</h2>
-          <p>Handpicked shots from recent events and photowalks. <span id="gallery-count" aria-live="polite"></span></p>
+          <p>Handpicked shots from events and photowalks. <span id="gallery-count" aria-live="polite"></span></p>
         </div>
 
         <!-- Gallery is populated dynamically from /resources/gallery-images - Here data-max is the maximum number of images to load -->
@@ -172,9 +205,7 @@
         <p>For event coverage or collaboration enquiries, reach out to us:</p>
         <ul class="contact-list">
           <li><strong>Email:</strong> <a href="mailto:vesit.photocircle@ves.ac.in">vesit.photocircle@ves.ac.in</a></li>
-          <li><strong>Instagram:</strong> <a target="_blank" rel="noopener noreferrer" href="https://instagram.com/vesit_photocircle">@vesit_photocircle</a></li>
-          <li><strong>Facebook:</strong> <a target="_blank" rel="noopener noreferrer" href="https://facebook.com/vesitphotocircle">/vesitphotocircle</a></li>
-          <li><strong>Linktree:</strong> <a target="_blank" rel="noopener noreferrer" href="https://linktr.ee/vesit_photocircle">All links</a></li>
+          <li><strong>Instagram:</strong> <a target="_blank" rel="noopener noreferrer" href="https://instagram.com/vesit.photocircle">@vesit.photocircle</a></li>
         </ul>
       </div>
     </section>

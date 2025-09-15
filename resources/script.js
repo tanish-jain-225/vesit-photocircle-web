@@ -119,19 +119,61 @@ if (lightbox) {
   const MAX_CONCURRENCY = 4; // simultaneous loads to avoid thrash
   let discovered = []; // all discovered image URLs
   let currentPage = 1;
+  let rendered = 0;
 
   function fileExists(src) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = src; // no cache-busting to leverage CDN/browser cache
+    // Prefer a lightweight HEAD request to check for existence to avoid
+    // creating Image objects that emit 404s in the console in some servers/browsers.
+    // Fall back to using an Image when fetch/HEAD is not available or blocked.
+    return new Promise(async (resolve) => {
+      if (!src) return resolve(false);
+      // Use fetch HEAD with timeout when possible
+      if (window.fetch && window.AbortController) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        try {
+          const resp = await fetch(src, { method: 'HEAD', signal: controller.signal, cache: 'no-cache' });
+          clearTimeout(timeout);
+          // HTTP 200-299 means exists
+          return resolve(resp.ok);
+        } catch (e) {
+          // network error, CORS, or aborted; fall through to image probe fallback
+        }
+      }
+
+      // Fallback: use Image() but be tolerant of errors
+      try {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = src;
+      } catch (e) {
+        resolve(false);
+      }
     });
   }
 
   async function buildSequentialList() {
     const candidates = [];
-    // Try 1..max for each extension until a gap of all exts is found for 10 in a row
+    // First try to fetch a manifest `index.json` which should contain filenames (fast on Vercel/static hosts)
+    try {
+      const manifestUrl = `${basePath.replace(/\/$/, '')}/index.json`;
+      const resp = await fetch(manifestUrl, { cache: 'no-cache' });
+      if (resp.ok) {
+        const list = await resp.json();
+        if (Array.isArray(list) && list.length) {
+          for (const fileName of list) {
+            const url = `${basePath}/${fileName}`;
+            candidates.push({ url, caption: fileName.replace(/\.[a-zA-Z0-9]+$/, '') });
+          }
+          return candidates;
+        }
+      }
+    } catch (e) {
+      // manifest not available or parse failed — fall back to probing
+    }
+
+    // Fallback: probe sequentially (existing behavior)
     let consecutiveMisses = 0;
     for (let i = 1; i <= max; i++) {
       let foundForIndex = false;
@@ -159,12 +201,34 @@ if (lightbox) {
     a.href = url;
     a.className = 'gallery-item';
     a.setAttribute('data-caption', caption || '');
+
+    // Image element
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.decoding = 'async';
-    img.src = url;
     img.alt = caption || 'Photo';
+
+    // Skeleton overlay while image loads
+    const overlay = document.createElement('div');
+    overlay.className = 'skeleton-overlay';
+    const spinner = document.createElement('div');
+    spinner.className = 'image-spinner';
+    overlay.appendChild(spinner);
+
+    img.addEventListener('load', () => {
+      img.classList.add('is-loaded');
+      overlay.remove();
+    });
+    img.addEventListener('error', () => {
+      // keep overlay and mark as failed
+      overlay.remove();
+      img.classList.add('is-loaded');
+      img.alt = 'Failed to load image';
+    });
+
+    img.src = url;
     a.appendChild(img);
+    a.appendChild(overlay);
     return a;
   }
 
@@ -212,11 +276,27 @@ if (lightbox) {
   }
 
   (async () => {
-    grid.classList.add('loading');
+    // Show skeleton placeholders while we discover images
+    grid.classList.add('loading', 'skeleton-loading');
+    const skeletonCount = Math.min(12, BATCH_SIZE);
+    const skeletonFrag = document.createDocumentFragment();
+    for (let i = 0; i < skeletonCount; i++) {
+      const s = document.createElement('div');
+      s.className = 'skeleton-item';
+      const sh = document.createElement('div'); sh.className = 'skeleton-shimmer';
+      const ph = document.createElement('div'); ph.className = 'skeleton-placeholder';
+      const cap = document.createElement('div'); cap.className = 'skeleton-caption'; ph.appendChild(cap);
+      s.appendChild(sh); s.appendChild(ph);
+      skeletonFrag.appendChild(s);
+    }
+    grid.innerHTML = '';
+    grid.appendChild(skeletonFrag);
+
     discovered = await buildSequentialList();
     updateCount();
     await renderPage(1);
-    grid.classList.remove('loading');
+    // remove skeletons and loading overlay
+    grid.classList.remove('loading', 'skeleton-loading');
     updatePager();
     document.dispatchEvent(new CustomEvent('gallery:populated'));
   })();
@@ -314,6 +394,69 @@ window.addEventListener('keydown', (e) => {
 // Footer year
 const yearEl = document.getElementById('year');
 if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+// Make meta tags and JSON-LD absolute so previews work on any environment
+(function normalizeMetaAndSocialLinks() {
+  try {
+    const origin = window.location.origin === 'null' ? '' : window.location.origin; // file:// may be 'null'
+
+    // Helper to make root-relative -> absolute
+    function toAbsolute(url) {
+      if (!url) return url;
+      try {
+        const u = new URL(url, origin || window.location.href);
+        return u.toString();
+      } catch (e) {
+        return url;
+      }
+    }
+
+    // Canonical
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) canonical.href = toAbsolute(canonical.getAttribute('href'));
+
+    // OG & Twitter images and og:url
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) ogUrl.setAttribute('content', toAbsolute(ogUrl.getAttribute('content')));
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage) ogImage.setAttribute('content', toAbsolute(ogImage.getAttribute('content')));
+    const twitterImage = document.querySelector('meta[name="twitter:image"]');
+    if (twitterImage) twitterImage.setAttribute('content', toAbsolute(twitterImage.getAttribute('content')));
+
+    // Update JSON-LD script contents (Organization) to absolute urls
+    const ld = document.querySelector('script[type="application/ld+json"]');
+    if (ld) {
+      try {
+        const data = JSON.parse(ld.textContent);
+        if (data && typeof data === 'object') {
+          if (data.url) data.url = toAbsolute(String(data.url));
+          if (data.logo) data.logo = toAbsolute(String(data.logo));
+          if (Array.isArray(data.sameAs)) data.sameAs = data.sameAs.map(s => toAbsolute(s));
+          ld.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (e) {
+        // ignore JSON parse errors
+      }
+    }
+
+    // Ensure social links in contact list use absolute URLs
+    const contactList = document.querySelector('.contact-list');
+    if (contactList) {
+      contactList.querySelectorAll('a').forEach(a => {
+        const href = a.getAttribute('href');
+        if (!href) return;
+        // Only adjust root-relative links
+        if (href.startsWith('/')) a.href = toAbsolute(href);
+        // For known social short-hand links (instagram without protocol), ensure absolute
+        if (href.startsWith('https://instagram.com') || href.startsWith('http://instagram.com')) return;
+        if (/^https?:\/\//i.test(href)) return;
+        if (href.startsWith('@')) return;
+      });
+    }
+  } catch (e) {
+    // no-op
+  }
+})();
 
 // Fixed header offset and smooth scroll without changing URL
 (function initSmoothScrollWithOffset() {
