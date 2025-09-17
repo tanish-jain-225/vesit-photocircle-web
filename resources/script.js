@@ -98,7 +98,15 @@ function setLightboxSource(src) {
 
 function openLightbox(src, caption) {
   if (!lightbox || !lightboxImage) return;
+  // Reset our image zoom state to baseline before showing
+  try { resetZoom(); applyTransform(); } catch (e) {}
+  // Best-effort: reset page CSS zoom to 100% so browser-level zoom-like CSS
+  // scaling doesn't interfere with the lightbox experience. Note: this
+  // cannot change the browser's actual zoom level set by the user.
+  try { document.documentElement.style.zoom = '1'; document.body.style.zoom = '1'; } catch (e) {}
   setLightboxSource(src);
+  // Disable native browser pinch-zoom while our lightbox is active
+  try { disableNativeZoom(); disableBrowserZoomViaMeta(); } catch (e) {}
   lightboxImage.alt = caption || 'Expanded photo';
   if (lightboxCaption) lightboxCaption.textContent = '';
   lastFocusedBeforeLightbox = document.activeElement;
@@ -130,11 +138,121 @@ function closeLightbox() {
   lightbox.setAttribute('inert', '');
   lightboxImage.src = '';
   document.body.style.overflow = '';
-  resetZoom(); applyTransform();
+  // Reset our zoom state and restore native browser zoom behavior before hiding
+  try { resetZoom(); applyTransform(); } catch (e) {}
+  try { enableNativeZoom(); restoreBrowserZoomMeta(); } catch (e) {}
+  // Remove any CSS zoom override we applied on open
+  try { document.documentElement.style.zoom = ''; document.body.style.zoom = ''; } catch (e) {}
   // Restore focus to the element that opened the lightbox
   if (lastFocusedBeforeLightbox && typeof lastFocusedBeforeLightbox.focus === 'function') {
     lastFocusedBeforeLightbox.focus();
   }
+}
+
+// Prevent native browser zoom while the lightbox is open so our custom
+// pinch/zoom interactions are not interfered with. We use touch-action where
+// supported and also attach gesture event handlers on iOS as a fallback.
+let _nativeZoomDisabled = false;
+function _preventGesture(e) { try { e.preventDefault(); } catch (err) {} }
+// Additional handlers to aggressively prevent page zoom while lightbox is open
+let _lastTouchEnd = 0;
+function _preventDoubleTapZoom(e) {
+  try {
+    const now = Date.now();
+    if (now - _lastTouchEnd <= 350) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    _lastTouchEnd = now;
+  } catch (err) {}
+}
+function _preventWheelZoom(e) {
+  try {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+    }
+  } catch (err) {}
+}
+function _preventKeyZoom(e) {
+  try {
+    // Block Ctrl/Cmd + (+,=,-,0)
+    if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0')) {
+      e.preventDefault();
+    }
+  } catch (err) {}
+}
+function disableNativeZoom() {
+  if (_nativeZoomDisabled) return;
+  _nativeZoomDisabled = true;
+  try {
+    // Prefer using CSS touch-action to opt-out of default gestures
+    document.documentElement.style.touchAction = 'none';
+    document.body.style.touchAction = 'none';
+  } catch (e) {}
+  // iOS Safari supports gesturestart/gesturechange — prevent them if available
+  try {
+    window.addEventListener('gesturestart', _preventGesture, { passive: false });
+    window.addEventListener('gesturechange', _preventGesture, { passive: false });
+    window.addEventListener('gestureend', _preventGesture, { passive: false });
+    // Prevent double-tap zoom
+    window.addEventListener('touchend', _preventDoubleTapZoom, { passive: false });
+    // Prevent ctrl/meta + wheel zoom on desktop
+    window.addEventListener('wheel', _preventWheelZoom, { passive: false });
+    // Prevent keyboard zoom shortcuts
+    window.addEventListener('keydown', _preventKeyZoom, { passive: false });
+  } catch (e) {}
+}
+function enableNativeZoom() {
+  if (!_nativeZoomDisabled) return;
+  _nativeZoomDisabled = false;
+  try {
+    document.documentElement.style.touchAction = '';
+    document.body.style.touchAction = '';
+  } catch (e) {}
+  try {
+    window.removeEventListener('gesturestart', _preventGesture, { passive: false });
+    window.removeEventListener('gesturechange', _preventGesture, { passive: false });
+    window.removeEventListener('gestureend', _preventGesture, { passive: false });
+    window.removeEventListener('touchend', _preventDoubleTapZoom, { passive: false });
+    window.removeEventListener('wheel', _preventWheelZoom, { passive: false });
+    window.removeEventListener('keydown', _preventKeyZoom, { passive: false });
+  } catch (e) {}
+}
+
+// Additionally, attempt to disable browser-level zoom by adjusting the
+// viewport meta tag while the lightbox is open. This cannot change the
+// browser's actual zoom level but prevents mobile browsers from letting the
+// user pinch/zoom the page itself, avoiding conflicts with our UI.
+let _savedViewportMetaContent = null;
+let _createdViewportMeta = false;
+function disableBrowserZoomViaMeta() {
+  try {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.setAttribute('data-generated-by', 'lightbox-zoom-disable');
+      document.head.appendChild(meta);
+      _createdViewportMeta = true;
+      _savedViewportMetaContent = '';
+    } else {
+      _savedViewportMetaContent = meta.getAttribute('content') || '';
+    }
+    // Set a restrictive viewport to prevent browser-level scaling
+    meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no');
+  } catch (e) { /* ignore */ }
+}
+function restoreBrowserZoomMeta() {
+  try {
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    if (meta.getAttribute('data-generated-by') === 'lightbox-zoom-disable') {
+      meta.remove();
+    } else {
+      meta.setAttribute('content', _savedViewportMetaContent || '');
+    }
+  } catch (e) { /* ignore */ }
+  _savedViewportMetaContent = null; _createdViewportMeta = false;
 }
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }

@@ -136,7 +136,7 @@ a { color: var(--text); text-decoration: none; }
   border-radius: 6px; 
 }
 .gallery-actions.pager .btn:hover { background: rgba(255,255,255,0.06); }
-.gallery-actions .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.gallery-actions .btn[disabled] { opacity: 0.45; cursor: pointer !important; }
 
 /* Lightbox */
 .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100; }
@@ -197,6 +197,15 @@ a { color: var(--text); text-decoration: none; }
 .lightbox-prev[aria-disabled="true"], .lightbox-next[aria-disabled="true"],
 .lightbox-prev:disabled, .lightbox-next:disabled {
   opacity: 0.4; cursor: not-allowed;
+}
+
+/* Ensure navigation buttons float above the image and receive pointer events */
+.lightbox-prev, .lightbox-next { z-index: 30; pointer-events: auto; cursor: pointer !important; touch-action: none; }
+.lightbox-prev:hover, .lightbox-next:hover { cursor: pointer !important; }
+
+/* Slightly larger touch targets on small screens */
+@media (max-width: 640px) {
+  .lightbox-prev, .lightbox-next { width: 54px; height: 54px; font-size: 20px; }
 }
 
 /* Floating back-to-top */
