@@ -194,14 +194,24 @@
       <div class="lightbox" role="dialog" aria-modal="true" aria-hidden="true">
         <div class="lightbox-dialog" role="document">
           <button class="lightbox-close" aria-label="Close">×</button>
-          <div class="lightbox-media">
-            <img class="lightbox-image" alt="Expanded photo">
-          </div>
+              <div class="lightbox-media">
+                <div class="lightbox-image-wrap">
+                  <img class="lightbox-image" alt="Expanded photo">
+                </div>
+                <div class="lightbox-zoom-controls" aria-hidden="false">
+                  <button class="lightbox-zoom-button lightbox-zoom-in" aria-label="Zoom in">+</button>
+                  <button class="lightbox-zoom-button lightbox-zoom-reset" aria-label="Reset zoom">0</button>
+                  <button class="lightbox-zoom-button lightbox-zoom-out" aria-label="Zoom out">−</button>
+                </div>
+              </div>
           <p class="lightbox-caption"></p>
           <div class="lightbox-meta">
             <span id="lightbox-image-pos" class="lightbox-image-pos" aria-live="polite"></span>
             <span class="lightbox-meta-sep">•</span>
             <span id="lightbox-page-pos" class="lightbox-page-pos" aria-live="polite"></span>
+          </div>
+          <div class="lightbox-zoom-indicator" aria-hidden="true">
+            <span id="lightbox-zoom-percent">100%</span>
           </div>
           <button class="lightbox-prev" aria-label="Previous image">‹</button>
           <button class="lightbox-next" aria-label="Next image">›</button>

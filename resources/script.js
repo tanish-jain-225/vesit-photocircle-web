@@ -23,8 +23,24 @@ const lightboxImage = document.querySelector('.lightbox-image');
 const lightboxCaption = document.querySelector('.lightbox-caption');
 const lightboxClose = document.querySelector('.lightbox-close');
 const lightboxDialog = document.querySelector('.lightbox-dialog');
+const lightboxImageWrap = document.querySelector('.lightbox-image-wrap');
+const zoomInBtn = document.querySelector('.lightbox-zoom-in');
+const zoomOutBtn = document.querySelector('.lightbox-zoom-out');
+const zoomResetBtn = document.querySelector('.lightbox-zoom-reset');
+const zoomPercentEl = document.getElementById('lightbox-zoom-percent');
 let lastFocusedBeforeLightbox = null;
 let preloadedImages = new Map();
+// Zoom state
+let zoom = 1; // 1 = fit, >1 zoomed in
+let translateX = 0;
+let translateY = 0;
+const ZOOM_STEP = 0.25;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+let isDragging = false;
+let dragStart = null;
+let baseWidth = 0;
+let baseHeight = 0;
 
 // Global helper to update lightbox metadata (image position and page)
 function updateLightboxMetaForIndexGlobal(idx) {
@@ -61,6 +77,15 @@ function setLightboxSource(src) {
   lightboxDialog?.classList.add('loading');
   const doSet = () => {
     lightboxImage.onload = () => {
+      // Reset transforms and record the baseline displayed size (fit-to-container)
+      try {
+        resetZoom();
+        lightboxImage.style.transform = '';
+        const r = lightboxImage.getBoundingClientRect();
+        baseWidth = r.width || 0;
+        baseHeight = r.height || 0;
+      } catch (e) { baseWidth = 0; baseHeight = 0; }
+      applyTransform();
       lightboxImage.classList.add('is-visible');
       lightboxDialog?.classList.remove('loading');
       lightboxImage.onload = null;
@@ -105,11 +130,115 @@ function closeLightbox() {
   lightbox.setAttribute('inert', '');
   lightboxImage.src = '';
   document.body.style.overflow = '';
+  resetZoom(); applyTransform();
   // Restore focus to the element that opened the lightbox
   if (lastFocusedBeforeLightbox && typeof lastFocusedBeforeLightbox.focus === 'function') {
     lastFocusedBeforeLightbox.focus();
   }
 }
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function applyTransform() {
+  if (!lightboxImage) return;
+  // Clamp translate values so user cannot pan image completely out of view.
+  try {
+    const wrap = lightboxImageWrap || lightboxImage.parentElement;
+    const rect = lightboxImage.getBoundingClientRect();
+    const containerRect = wrap.getBoundingClientRect();
+    const visibleW = rect.width * zoom;
+    const visibleH = rect.height * zoom;
+    const maxOffsetX = Math.max(0, (visibleW - containerRect.width) / 2);
+    const maxOffsetY = Math.max(0, (visibleH - containerRect.height) / 2);
+    // visual translation is translateX * zoom (because translate happens before scale)
+    const limitX = maxOffsetX / Math.max(0.0001, zoom);
+    const limitY = maxOffsetY / Math.max(0.0001, zoom);
+    translateX = clamp(translateX, -limitX, limitX);
+    translateY = clamp(translateY, -limitY, limitY);
+  } catch (e) {
+    // ignore and apply without clamping
+  }
+  const t = `translate(${translateX}px, ${translateY}px) scale(${zoom})`;
+  lightboxImage.style.transform = t;
+  // Update zoom percentage display
+  try { if (zoomPercentEl) zoomPercentEl.textContent = `${Math.round(zoom * 100)}%`; } catch (e) {}
+}
+function resetZoom() {
+  zoom = 1; translateX = 0; translateY = 0; isDragging = false; dragStart = null;
+  if (lightboxImage) {
+    lightboxImage.style.transform = '';
+    lightboxImage.classList.remove('dragging');
+  }
+  try { if (zoomPercentEl) zoomPercentEl.textContent = '100%'; } catch (e) {}
+}
+
+// Zoom controls handlers
+function setZoom(newZoom, centerX = 0, centerY = 0) {
+  const prevZoom = zoom;
+  zoom = clamp(newZoom, ZOOM_MIN, ZOOM_MAX);
+  // When zooming, adjust translate so cursor remains over same point (approximate)
+  if (lightboxImage && prevZoom !== zoom) {
+    const rect = lightboxImage.getBoundingClientRect();
+    const cx = centerX || (rect.left + rect.width / 2);
+    const cy = centerY || (rect.top + rect.height / 2);
+    const offsetX = (cx - rect.left) - rect.width / 2;
+    const offsetY = (cy - rect.top) - rect.height / 2;
+    translateX = translateX - offsetX * (zoom / prevZoom - 1);
+    translateY = translateY - offsetY * (zoom / prevZoom - 1);
+  }
+  applyTransform();
+}
+
+// Mouse wheel zoom
+function onWheelZoom(e) {
+  if (lightbox.getAttribute('aria-hidden') === 'true') return;
+  if (Math.abs(e.deltaY) < 1) return;
+  const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+  setZoom(zoom + delta, e.clientX, e.clientY);
+  e.preventDefault();
+}
+
+// Drag to pan when zoomed
+function onPointerDown(e) {
+  if (zoom <= 1) return;
+  isDragging = true;
+  dragStart = { x: e.clientX, y: e.clientY, tx: translateX, ty: translateY };
+  lightboxImage.classList.add('dragging');
+  e.preventDefault();
+}
+function onPointerMove(e) {
+  if (!isDragging || !dragStart) return;
+  const dx = e.clientX - dragStart.x;
+  const dy = e.clientY - dragStart.y;
+  translateX = dragStart.tx + dx;
+  translateY = dragStart.ty + dy;
+  applyTransform();
+}
+function onPointerUp(e) {
+  if (!isDragging) return;
+  isDragging = false;
+  dragStart = null;
+  lightboxImage.classList.remove('dragging');
+}
+
+// Wire zoom control buttons if present
+try {
+  zoomInBtn?.addEventListener('click', (e) => { e.stopPropagation(); setZoom(zoom + ZOOM_STEP); });
+  zoomOutBtn?.addEventListener('click', (e) => { e.stopPropagation(); setZoom(zoom - ZOOM_STEP); });
+  zoomResetBtn?.addEventListener('click', (e) => { e.stopPropagation(); resetZoom(); applyTransform(); });
+  // Wheel zoom
+  lightbox?.addEventListener('wheel', onWheelZoom, { passive: false });
+  // Pointer drag for pan
+  lightboxImage?.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  // Keyboard +/- support
+  window.addEventListener('keydown', (e) => {
+    if (lightbox.getAttribute('aria-hidden') === 'true') return;
+    if (e.key === '+' || e.key === '=' ) { setZoom(zoom + ZOOM_STEP); e.preventDefault(); }
+    if (e.key === '-') { setZoom(zoom - ZOOM_STEP); e.preventDefault(); }
+    if (e.key === '0') { resetZoom(); applyTransform(); e.preventDefault(); }
+  });
+} catch (err) { /* ignore if elements missing */ }
 
 // Focus trap within lightbox when open
 if (lightbox) {
@@ -789,16 +918,85 @@ if (yearEl) yearEl.textContent = String(new Date().getFullYear());
   });
 
   let startX = 0;
-  lightbox.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
-  lightbox.addEventListener('touchend', (e) => {
-    const endX = e.changedTouches[0].clientX;
-    const dx = endX - startX;
-    const list = getFullList();
-    if (Math.abs(dx) > 40) {
-      if (dx > 0 && currentIndex > 0) openByIndex(currentIndex - 1);
-      else if (dx < 0 && currentIndex < list.length - 1) openByIndex(currentIndex + 1);
+  // Touch handling: support both single-finger swipe for navigation and
+  // two-finger pinch for zoom. We track whether a pinch is active to avoid
+  // conflicts.
+  let touchStartX = 0;
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+  function distance(t1, t2) { const dx = t1.clientX - t2.clientX; const dy = t1.clientY - t2.clientY; return Math.hypot(dx, dy); }
+
+  lightbox.addEventListener('touchstart', (e) => {
+    if (!e.touches) return;
+    if (e.touches.length === 2) {
+      // Begin pinch gesture
+      pinchStartDist = distance(e.touches[0], e.touches[1]);
+      pinchStartZoom = zoom;
+      // Cancel any single-finger drag state
+      isDragging = false; dragStart = null;
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      if (zoom > 1) {
+        // Start panning with single finger when zoomed
+        isDragging = true;
+        dragStart = { x: t.clientX, y: t.clientY, tx: translateX, ty: translateY };
+      } else {
+        // Prepare for swipe navigation when not zoomed
+        touchStartX = t.clientX;
+      }
     }
-  });
+  }, { passive: true });
+
+  lightbox.addEventListener('touchmove', (e) => {
+    if (!e.touches) return;
+    // Pinch-to-zoom
+    if (e.touches.length === 2) {
+      const d = distance(e.touches[0], e.touches[1]);
+      if (pinchStartDist > 0) {
+        const scale = d / pinchStartDist;
+        setZoom(clamp(pinchStartZoom * scale, ZOOM_MIN, ZOOM_MAX));
+      }
+      e.preventDefault();
+      return;
+    }
+
+    // Single-finger pan when zoomed
+    if (e.touches.length === 1 && isDragging && zoom > 1) {
+      const t = e.touches[0];
+      const dx = t.clientX - dragStart.x;
+      const dy = t.clientY - dragStart.y;
+      translateX = dragStart.tx + dx;
+      translateY = dragStart.ty + dy;
+      applyTransform();
+      e.preventDefault();
+      return;
+    }
+    // Otherwise, allow default behavior (swipe nav handled on touchend when zoom <=1)
+  }, { passive: false });
+
+  lightbox.addEventListener('touchend', (e) => {
+    if (!e.changedTouches) return;
+    // If pinch was active, clear pinch tracking
+    if (pinchStartDist > 0) {
+      pinchStartDist = 0; pinchStartZoom = zoom;
+      return;
+    }
+    // If we were panning, stop panning
+    if (isDragging) {
+      isDragging = false; dragStart = null; applyTransform();
+      return;
+    }
+    // Single-finger swipe navigation (only when not zoomed and not panning)
+    if (zoom <= 1) {
+      const endX = e.changedTouches[0].clientX;
+      const dx = endX - touchStartX;
+      const list = getFullList();
+      if (Math.abs(dx) > 40) {
+        if (dx > 0 && currentIndex > 0) openByIndex(currentIndex - 1);
+        else if (dx < 0 && currentIndex < list.length - 1) openByIndex(currentIndex + 1);
+      }
+    }
+  }, { passive: true });
 })();
 
 // Reveal on scroll
