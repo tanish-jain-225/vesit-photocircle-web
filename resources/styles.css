@@ -95,8 +95,21 @@ a { color: var(--text); text-decoration: none; }
 .gallery-item:hover::after { opacity: 1; }
 
 .gallery-grid.loading { position: relative; }
-.gallery-grid.loading::after { content: "Loading…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: rgba(0,0,0,0.08); border-radius: 12px; }
-.gallery-grid.skeleton-loading::after { display: none; }
+.gallery-grid.loading::after { content: "Loading…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: rgba(0,0,0,0.08); border-radius: 12px; pointer-events: none; }
+.gallery-grid.skeleton-loading::after { display: none; pointer-events: none; }
+
+/* Overlay pager positioned at top-center of the gallery section */
+.gallery-overlay-pager { position: relative; width: 100%; display: flex; justify-content: center; margin-bottom: 10px; }
+.gallery-overlay-pager .gallery-actions { background: transparent; padding: 0; border-radius: 0; border: 0; box-shadow: none; z-index: 80; }
+.gallery-overlay-pager .gallery-actions .btn { font-size: 20px; padding: 6px 10px; background: transparent; }
+
+/* When used as inline pager below the heading */
+.gallery-inline-pager { margin-top: 8px; display: flex; justify-content: flex-start; }
+.gallery-inline-pager .gallery-actions { justify-content: flex-start; gap: 12px; }
+
+.page-indicator { color: var(--muted); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.page-current, .page-total { min-width: 28px; display: inline-block; text-align: center; }
+.page-sep { color: rgba(255,255,255,0.35); }
 
 /* Skeleton loaders for gallery items */
 .skeleton-list { display: contents; }
@@ -112,7 +125,7 @@ a { color: var(--text); text-decoration: none; }
 .gallery-item .skeleton-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(180deg, rgba(11,13,18,0.4), rgba(11,13,18,0.35)); }
 .gallery-item .image-spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: rgba(255,255,255,0.9); animation: spin 1s linear infinite; }
 
-.gallery-actions { display: flex; justify-content: center; margin-top: 12px; align-items: center; gap: 10px; }
+.gallery-actions { display: flex; justify-content: center; margin-top: 12px; align-items: center; gap: 10px; position: relative; z-index: 80; }
 .gallery-actions.pager .btn { 
   min-width: unset; 
   background: transparent; 
@@ -134,6 +147,17 @@ a { color: var(--text); text-decoration: none; }
 .lightbox-image { max-width: 100%; max-height: 100%; object-fit: contain; display: block; opacity: 0; transition: opacity .25s ease; }
 .lightbox-image.is-visible { opacity: 1; }
 .lightbox-caption { display: none; }
+/* Lightbox meta (image position and page) */
+.lightbox-meta { display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--muted); margin-top: 8px; }
+.lightbox-meta .lightbox-image-pos { font-weight: 700; color: var(--text); }
+.lightbox-meta .lightbox-page-pos { font-size: 13px; color: var(--muted); }
+
+/* Make lightbox meta more prominent and responsive */
+.lightbox-meta { position: relative; z-index: 2; padding: 6px 10px; background: rgba(255,255,255,0.02); border-radius: 8px; }
+.lightbox-meta .lightbox-meta-sep { opacity: 0.5; margin: 0 6px; }
+@media (max-width: 640px) {
+  .lightbox-meta { font-size: 13px; padding: 8px; }
+}
 .lightbox-close { position: absolute; top: 10px; right: 10px; font-size: 22px; line-height: 1; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; width: 36px; height: 36px; cursor: pointer; }
 
 /* Loading state */
@@ -164,6 +188,7 @@ a { color: var(--text); text-decoration: none; }
   background: var(--card); color: var(--text); border: 1px solid var(--border);
   border-radius: 999px; padding: 10px 12px; opacity: 0; pointer-events: none;
   transition: opacity .25s ease, transform .25s ease; transform: translateY(8px);
+  cursor: pointer;
 }
 .to-top-floating.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 

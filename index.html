@@ -173,15 +173,21 @@
         <div class="section-head">
           <h2>Best Pictures Gallery</h2>
           <p>Handpicked shots from events and photowalks. <span id="gallery-count" aria-live="polite"></span></p>
+          <div class="gallery-overlay-pager gallery-inline-pager">
+            <div class="gallery-actions pager">
+              <button class="btn" id="prev-page" aria-label="Previous page">‹</button>
+              <span id="page-indicator" class="page-indicator" aria-live="polite">
+                <span id="page-current" class="page-current">1</span>
+                <span class="page-sep">/</span>
+                <span id="page-total" class="page-total">1</span>
+              </span>
+              <button class="btn" id="next-page" aria-label="Next page">›</button>
+            </div>
+          </div>
         </div>
 
         <!-- Gallery is populated dynamically from /resources/gallery-images - Here data-max is the maximum number of images to load -->
-        <div class="gallery-grid" data-gallery-path="./resources/gallery-images" data-max="300"></div>
-        <div class="gallery-actions pager">
-          <button class="btn" id="prev-page" aria-label="Previous page">‹</button>
-          <span id="page-indicator" aria-live="polite">Page 1</span>
-          <button class="btn" id="next-page" aria-label="Next page">›</button>
-        </div>
+        <div class="gallery-grid" data-gallery-path="./resources/gallery-images"></div>
       </div>
 
       <!-- Lightbox modal -->
@@ -192,6 +198,11 @@
             <img class="lightbox-image" alt="Expanded photo">
           </div>
           <p class="lightbox-caption"></p>
+          <div class="lightbox-meta">
+            <span id="lightbox-image-pos" class="lightbox-image-pos" aria-live="polite"></span>
+            <span class="lightbox-meta-sep">•</span>
+            <span id="lightbox-page-pos" class="lightbox-page-pos" aria-live="polite"></span>
+          </div>
           <button class="lightbox-prev" aria-label="Previous image">‹</button>
           <button class="lightbox-next" aria-label="Next image">›</button>
         </div>

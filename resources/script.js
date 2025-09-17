@@ -26,6 +26,23 @@ const lightboxDialog = document.querySelector('.lightbox-dialog');
 let lastFocusedBeforeLightbox = null;
 let preloadedImages = new Map();
 
+// Global helper to update lightbox metadata (image position and page)
+function updateLightboxMetaForIndexGlobal(idx) {
+  try {
+    const imgPosEl = document.getElementById('lightbox-image-pos');
+    const pagePosEl = document.getElementById('lightbox-page-pos');
+    const grid = document.querySelector('.gallery-grid');
+    const list = (grid && Array.isArray(grid.__discovered)) ? grid.__discovered : (window.galleryState && Array.isArray(window.galleryState.discovered) ? window.galleryState.discovered : []);
+    const total = Array.isArray(list) ? list.length : 0;
+    const position = Number.isFinite(idx) ? (idx + 1) : undefined;
+    const batch = (grid && grid.__batchSize) || (window.galleryState && window.galleryState.BATCH_SIZE) || 12;
+    const page = position ? Math.floor((position - 1) / batch) + 1 : undefined;
+    if (imgPosEl) imgPosEl.textContent = position ? String(position) : '';
+    if (pagePosEl) pagePosEl.textContent = page ? `Page ${page} of ${Math.max(1, Math.ceil(total / batch))}` : '';
+  } catch (e) { /* ignore */ }
+}
+try { window.__updateLightboxMetaForIndex = updateLightboxMetaForIndexGlobal; window.updateLightboxMetaForIndex = updateLightboxMetaForIndexGlobal; } catch (e) { /* ignore */ }
+
 function preload(src) {
   if (!src || preloadedImages.has(src)) return preloadedImages.get(src);
   const img = new Image();
@@ -66,6 +83,16 @@ function openLightbox(src, caption) {
   setTimeout(() => {
     (lightboxClose || lightboxDialog)?.focus?.();
   }, 0);
+  // If a gallery meta updater is available, attempt to compute index and update
+  try {
+    if (typeof window.__updateLightboxMetaForIndex === 'function') {
+      const gridEl = document.querySelector('.gallery-grid');
+      const list = (gridEl && Array.isArray(gridEl.__discovered)) ? gridEl.__discovered : (window.galleryState && Array.isArray(window.galleryState.discovered) ? window.galleryState.discovered : []);
+      const normalize = (u) => { try { return new URL(u, window.location.href).toString(); } catch (e) { return String(u); } };
+      const idx = list.findIndex(ent => normalize(ent.url) === normalize(src));
+      window.__updateLightboxMetaForIndex(idx);
+    }
+  } catch (e) { /* ignore */ }
 }
 
 function closeLightbox() {
@@ -121,8 +148,25 @@ if (lightbox) {
   let discovered = []; // all discovered image URLs
   let currentPage = 1;
   let rendered = 0;
+  let totalItems = 0;
+  let totalPages = 1;
 
-  console.info('[gallery] running in strict PNG-only mode');
+  // Debug helper: expose gallery runtime state for easy inspection in console
+  function exposeState() {
+    try {
+      window.galleryState = {
+        discovered: Array.isArray(discovered) ? discovered.slice() : [],
+        currentPage,
+        rendered,
+        totalItems,
+        totalPages,
+        BATCH_SIZE,
+        max,
+        basePath
+      };
+    } catch (e) { /* ignore */ }
+  }
+
 
   function fileExists(src) {
     // Prefer a lightweight HEAD request to check for existence to avoid
@@ -169,7 +213,6 @@ if (lightbox) {
             // Only honor .png entries when strict mode is enabled
             if (!/\.png$/i.test(fileName)) {
               // Log a warning for maintainers, but do not include non-PNG files
-              console.warn('[gallery] ignoring non-PNG manifest entry:', fileName);
               continue;
             }
             const url = `${basePath}/${fileName}`;
@@ -179,6 +222,7 @@ if (lightbox) {
         }
       }
     } catch (e) {
+      console.error('[gallery] manifest load failed or unavailable:', e && e.message ? e.message : e);
       // manifest not available or parse failed — fall back to probing
     }
 
@@ -279,9 +323,21 @@ if (lightbox) {
 
   function updatePager() {
     const totalPages = Math.max(1, Math.ceil(discovered.length / BATCH_SIZE));
-    if (pageIndicator) pageIndicator.textContent = `Page ${Math.min(currentPage, totalPages)} / ${totalPages}`;
+    const currentEl = document.getElementById('page-current');
+    const totalEl = document.getElementById('page-total');
+    if (currentEl) currentEl.textContent = String(Math.min(currentPage, totalPages));
+    if (totalEl) totalEl.textContent = String(totalPages);
     if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
     if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
+    // keep debug state current
+    try { exposeState(); } catch (e) { /* ignore */ }
+  }
+
+  // Ensure buttons reflect the discovered totals immediately after discovery
+  function syncPagerButtons() {
+    const total = Math.max(1, Math.ceil((Array.isArray(discovered) ? discovered.length : 0) / BATCH_SIZE));
+    if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+    if (nextPageBtn) nextPageBtn.disabled = currentPage >= total;
   }
 
   (async () => {
@@ -301,8 +357,25 @@ if (lightbox) {
     grid.innerHTML = '';
     grid.appendChild(skeletonFrag);
 
-    discovered = await buildSequentialList();
-    updateCount();
+  discovered = await buildSequentialList();
+  // Compute total items and pages immediately so UI can show correct totals
+  totalItems = Array.isArray(discovered) ? discovered.length : 0;
+  totalPages = Math.max(1, Math.ceil(totalItems / BATCH_SIZE));
+  // Sync button states immediately
+  try { syncPagerButtons(); } catch (e) { /* ignore */ }
+  // Update grid-exposed discovered list and expose runtime state
+  // Expose the full discovered list on the grid element so other modules (like
+  // the lightbox) can navigate across all images, even those not currently
+  // rendered in the DOM (pagination pages).
+  try { grid.__discovered = discovered; } catch (e) { /* ignore */ }
+  try { grid.__batchSize = BATCH_SIZE; } catch (e) { /* ignore */ }
+  exposeState();
+  updateCount();
+  // Ensure pager UI reflects correct totals before first render
+  const currentEl = document.getElementById('page-current');
+  const totalEl = document.getElementById('page-total');
+  if (currentEl) currentEl.textContent = String(Math.min(currentPage, totalPages));
+  if (totalEl) totalEl.textContent = String(totalPages);
     await renderPage(1);
     // remove skeletons and loading overlay
     grid.classList.remove('loading', 'skeleton-loading');
@@ -312,6 +385,7 @@ if (lightbox) {
 
   async function renderPage(page) {
     currentPage = page;
+    try { exposeState(); } catch (e) { /* ignore */ }
     const start = (page - 1) * BATCH_SIZE;
     const end = Math.min(start + BATCH_SIZE, discovered.length);
     const fragment = document.createDocumentFragment();
@@ -338,19 +412,111 @@ if (lightbox) {
     await Promise.all(runners);
   }
 
+  // Update lightbox meta (image position and page info) when an image opens
+  function updateLightboxMetaForIndex(idx) {
+    try {
+      const imgPosEl = document.getElementById('lightbox-image-pos');
+      const pagePosEl = document.getElementById('lightbox-page-pos');
+      const list = Array.isArray(discovered) ? discovered : (grid.__discovered || []);
+      const total = Array.isArray(list) ? list.length : 0;
+      const position = Number.isFinite(idx) ? (idx + 1) : undefined;
+      const batch = grid.__batchSize || BATCH_SIZE;
+      const page = position ? Math.floor((position - 1) / batch) + 1 : undefined;
+      if (imgPosEl) imgPosEl.textContent = position ? `${position}` : '';
+      if (pagePosEl) pagePosEl.textContent = page ? `Page ${page} of ${Math.max(1, Math.ceil(total / batch))}` : '';
+    } catch (e) { /* ignore */ }
+  }
+  // Expose helper for other code paths (openLightbox) to call after lightbox opens
+  try { window.__updateLightboxMetaForIndex = updateLightboxMetaForIndex; } catch (e) { /* ignore */ }
+
   prevPageBtn?.addEventListener('click', async () => {
     if (currentPage <= 1) return;
+    const newPage = currentPage - 1;
+    // Update UI state immediately
+    currentPage = newPage;
+    updatePager();
     prevPageBtn.disabled = true; nextPageBtn && (nextPageBtn.disabled = true);
-    await renderPage(currentPage - 1);
+    await renderPage(newPage);
     updatePager();
   });
   nextPageBtn?.addEventListener('click', async () => {
     const totalPages = Math.max(1, Math.ceil(discovered.length / BATCH_SIZE));
     if (currentPage >= totalPages) return;
+    const newPage = currentPage + 1;
+    // Update UI state immediately
+    currentPage = newPage;
+    updatePager();
     prevPageBtn && (prevPageBtn.disabled = true); nextPageBtn.disabled = true;
-    await renderPage(currentPage + 1);
+    await renderPage(newPage);
     updatePager();
   });
+
+  // Listen for requests from the lightbox to open a specific index so the
+  // gallery can render the page that contains that image (keeps UI in sync).
+  document.addEventListener('gallery:open-index', async (ev) => {
+    try {
+      const idx = Number(ev?.detail?.index);
+      if (!Number.isFinite(idx)) return;
+      const page = Math.floor(idx / BATCH_SIZE) + 1;
+      if (page !== currentPage) {
+        // Update UI to show the new page immediately while we load images
+        currentPage = page;
+        updatePager();
+        prevPageBtn && (prevPageBtn.disabled = true);
+        nextPageBtn && (nextPageBtn.disabled = true);
+        await renderPage(page);
+        updatePager();
+      }
+    } catch (e) { /* ignore */ }
+  });
+
+  // Harden pager buttons: pointerdown/pointerup with debounce to improve
+  // reliability across touch and pointer devices. Keep click as a fallback.
+  (function hardenPagerButtons() {
+    const debounce = (fn, ms = 250) => {
+      let last = 0;
+      return (...args) => {
+        const now = Date.now();
+        if (now - last < ms) return;
+        last = now;
+        return fn(...args);
+      };
+    };
+
+    if (prevPageBtn) {
+      const safePrev = debounce(async () => {
+        if (currentPage <= 1) return;
+        const newPage = currentPage - 1;
+        // update UI immediately
+        currentPage = newPage;
+        updatePager();
+        prevPageBtn.disabled = true; nextPageBtn && (nextPageBtn.disabled = true);
+        await renderPage(newPage);
+        updatePager();
+      }, 300);
+      prevPageBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); });
+      prevPageBtn.addEventListener('pointerup', (e) => { try { safePrev(); } catch (err) {} });
+      // keep click for non-pointer devices
+      prevPageBtn.addEventListener('click', (e) => { e.preventDefault(); safePrev(); });
+    }
+
+    if (nextPageBtn) {
+      const safeNext = debounce(async () => {
+        const totalPages = Math.max(1, Math.ceil(discovered.length / BATCH_SIZE));
+        if (currentPage >= totalPages) return;
+        const newPage = currentPage + 1;
+        // update UI immediately
+        currentPage = newPage;
+        updatePager();
+        prevPageBtn && (prevPageBtn.disabled = true); nextPageBtn.disabled = true;
+        await renderPage(newPage);
+        updatePager();
+      }, 300);
+      nextPageBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); });
+      nextPageBtn.addEventListener('pointerup', (e) => { try { safeNext(); } catch (err) {} });
+      nextPageBtn.addEventListener('click', (e) => { e.preventDefault(); safeNext(); });
+    }
+  })();
 })();
 
 // Open from gallery (event delegation to support dynamic items)
@@ -516,59 +682,110 @@ if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
 // (scrollspy removed as per request)
 
-// Lightbox index and navigation
+// Lightbox index and navigation (enhanced to use the full discovered list)
 (function enhanceLightboxNavigation() {
   if (!lightbox) return;
-  function getItems() { return Array.from(document.querySelectorAll('.gallery-item')); }
+  const gridEl = document.querySelector('.gallery-grid');
   const btnPrev = document.querySelector('.lightbox-prev');
   const btnNext = document.querySelector('.lightbox-next');
   let currentIndex = -1;
 
+  function normalizeUrl(u) {
+    try { return new URL(u, window.location.href).toString(); } catch (e) { return String(u); }
+  }
+
+  // Returns the authoritative list of items. Prefer the discovered manifest
+  // attached to the grid; fall back to DOM-derived list when necessary.
+  function getFullList() {
+    try {
+      if (gridEl && Array.isArray(gridEl.__discovered) && gridEl.__discovered.length) return gridEl.__discovered;
+    } catch (e) { /* ignore */ }
+    // Fallback to DOM mapping
+    return Array.from(document.querySelectorAll('.gallery-item')).map(a => ({
+      url: getItemSrc(a),
+      caption: a.getAttribute('data-caption') || a.querySelector('img')?.getAttribute('alt') || ''
+    }));
+  }
+
   function updateControls() {
+    const list = getFullList();
     const atStart = currentIndex <= 0;
-    const atEnd = currentIndex >= getItems().length - 1;
+    const atEnd = currentIndex >= list.length - 1;
     if (btnPrev) { btnPrev.disabled = atStart; btnPrev.setAttribute('aria-disabled', String(atStart)); }
     if (btnNext) { btnNext.disabled = atEnd; btnNext.setAttribute('aria-disabled', String(atEnd)); }
   }
 
   function openByIndex(idx) {
-    const items = getItems();
-    if (idx < 0 || idx >= items.length) return;
-    const a = items[idx];
-    if (!a) return;
-    const src = getItemSrc(a);
+    const list = getFullList();
+    if (idx < 0 || idx >= list.length) return;
+    const entry = list[idx];
+    if (!entry) return;
     currentIndex = idx;
-    openLightbox(src, '');
+    // Ensure gallery page containing this index is visible
+    try { document.dispatchEvent(new CustomEvent('gallery:open-index', { detail: { index: currentIndex } })); } catch (e) { /* ignore */ }
+    openLightbox(entry.url, entry.caption || '');
+    // update page/image metadata in lightbox
+    try { updateLightboxMetaForIndex(currentIndex); } catch (e) { /* ignore */ }
     updateControls();
-    const nextSrc = items[idx + 1] ? getItemSrc(items[idx + 1]) : undefined;
-    const prevSrc = items[idx - 1] ? getItemSrc(items[idx - 1]) : undefined;
-    preload(nextSrc);
-    preload(prevSrc);
+    const nextSrc = list[idx + 1] ? list[idx + 1].url : undefined;
+    const prevSrc = list[idx - 1] ? list[idx - 1].url : undefined;
+    preload(nextSrc); preload(prevSrc);
   }
 
+  // When user opens an image from the gallery, determine its index from the
+  // full list (not just the current DOM page) so lightbox navigation can move
+  // across pages.
   document.addEventListener('click', (e) => {
     const item = e.target.closest('.gallery-item');
     if (!item) return;
-    const items = getItems();
-    const idx = items.indexOf(item);
+    const src = getItemSrc(item);
+    const list = getFullList();
+    const idx = list.findIndex(ent => normalizeUrl(ent.url) === normalizeUrl(src));
     if (idx === -1) return;
     currentIndex = idx;
+    try { document.dispatchEvent(new CustomEvent('gallery:open-index', { detail: { index: currentIndex } })); } catch (e) { /* ignore */ }
     setTimeout(() => {
       updateControls();
-      const nextSrc = items[idx + 1] ? getItemSrc(items[idx + 1]) : undefined;
-      const prevSrc = items[idx - 1] ? getItemSrc(items[idx - 1]) : undefined;
+      try { updateLightboxMetaForIndex(currentIndex); } catch (e) { /* ignore */ }
+      const nextSrc = list[idx + 1] ? list[idx + 1].url : undefined;
+      const prevSrc = list[idx - 1] ? list[idx - 1].url : undefined;
       preload(nextSrc); preload(prevSrc);
     }, 0);
   });
 
   btnPrev?.addEventListener('click', (e) => { e.stopPropagation(); if (currentIndex > 0) openByIndex(currentIndex - 1); });
-  btnNext?.addEventListener('click', (e) => { e.stopPropagation(); if (currentIndex < items.length - 1) openByIndex(currentIndex + 1); });
+  btnNext?.addEventListener('click', (e) => { e.stopPropagation(); const list = getFullList(); if (currentIndex < list.length - 1) openByIndex(currentIndex + 1); });
 
   window.addEventListener('keydown', (e) => {
-    if (lightbox.getAttribute('aria-hidden') === 'true') return;
-    const items = getItems();
-    if (e.key === 'ArrowLeft' && currentIndex > 0) openByIndex(currentIndex - 1);
-    if (e.key === 'ArrowRight' && currentIndex < items.length - 1) openByIndex(currentIndex + 1);
+    const list = getFullList();
+    if (lightbox.getAttribute('aria-hidden') === 'false') {
+      if (e.key === 'ArrowLeft' && currentIndex > 0) openByIndex(currentIndex - 1);
+      if (e.key === 'ArrowRight' && currentIndex < list.length - 1) openByIndex(currentIndex + 1);
+      return;
+    }
+    // When lightbox is closed, use Arrow keys to move gallery pages
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      const prevBtn = document.getElementById('prev-page');
+      if (prevBtn && !prevBtn.disabled) {
+        // update UI immediately and trigger navigation
+        const newPage = Math.max(1, currentPage - 1);
+        if (newPage !== currentPage) {
+          currentPage = newPage; updatePager();
+        }
+        prevBtn.click();
+      }
+    }
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+      const nextBtn = document.getElementById('next-page');
+      if (nextBtn && !nextBtn.disabled) {
+        const totalPages = Math.max(1, Math.ceil(discovered.length / BATCH_SIZE));
+        const newPage = Math.min(totalPages, currentPage + 1);
+        if (newPage !== currentPage) {
+          currentPage = newPage; updatePager();
+        }
+        nextBtn.click();
+      }
+    }
   });
 
   let startX = 0;
@@ -576,9 +793,10 @@ if (yearEl) yearEl.textContent = String(new Date().getFullYear());
   lightbox.addEventListener('touchend', (e) => {
     const endX = e.changedTouches[0].clientX;
     const dx = endX - startX;
+    const list = getFullList();
     if (Math.abs(dx) > 40) {
       if (dx > 0 && currentIndex > 0) openByIndex(currentIndex - 1);
-      else if (dx < 0 && currentIndex < items.length - 1) openByIndex(currentIndex + 1);
+      else if (dx < 0 && currentIndex < list.length - 1) openByIndex(currentIndex + 1);
     }
   });
 })();
